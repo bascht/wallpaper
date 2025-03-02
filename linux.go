@@ -3,6 +3,7 @@
 package wallpaper
 
 import (
+	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
@@ -53,10 +54,24 @@ func SetFromFile(file string) error {
 	case "Deepin":
 		return exec.Command("dconf", "write", "/com/deepin/wrap/gnome/desktop/background/picture-uri", strconv.Quote("file://"+file)).Run()
 	default:
-		err := exec.Command("swaybg", "-i", file).Start()
-		// if the command completed successfully, return
-		if err == nil {
-			return nil
+		// Make sure we're on wayland at all, otherwise fall back to feh
+		if os.Getenv("WAYLAND_DISPLAY") != "" {
+
+			// Search for existing swww sockets which might indicate the user prefers it to swaybg
+			swwSock := os.Getenv("XDG_RUNTIME_DIR") + "/swww-" + os.Getenv("WAYLAND_DISPLAY") + ".socket"
+
+			if _, err := os.Stat(swwSock); err == nil {
+				err := exec.Command("swww", "img", file).Start()
+				if err == nil {
+					return nil
+				}
+			}
+
+			err := exec.Command("swaybg", "-i", file).Start()
+			// if the command completed successfully, return
+			if err == nil {
+				return nil
+			}
 		}
 
 		return exec.Command("feh", "-bg-fill", file).Run()
